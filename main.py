@@ -1,44 +1,94 @@
-from fastapi import FastAPI
-import requests
-from bs4 import BeautifulSoup
-import re
+from fastapi import FastAPI, Query
+from typing import Optional, List
+from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(
+    title="Pokemon TCG Market Price API",
+    description="Real-time Japanese Pokémon card market prices for global developers.",
+    version="1.0.0"
+)
 
-def get_card_price(card_name):
-    keyword = f"ポケモンカード {card_name}"
-    url = f"https://auctions.yahoo.co.jp/search/search?p={keyword}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+# 海外開発者が求める正確なデータ構造
+class CardPrice(BaseModel):
+    card_id: str          # 型番（例: "SV2a-173"）
+    name_ja: str          # 日本語名
+    name_en: str          # 英語名（海外エンジニア用）
+    set_name: str         # 収録パック名
+    card_number: str      # カード番号（例: "173/165"）
+    rarity: str           # レアリティ（SAR, SR, AR, etc.）
+    price_jpy: int        # 相場価格（日本円）
+    stock_status: str     # 在庫状況（in_stock, low_stock, out_of_stock）
+    updated_at: str       # 最終更新日時
+
+# 詳細データを持たせたデータベース（サンプル）
+CARD_DATABASE: List[dict] = [
+    {
+        "card_id": "SV2a-205",
+        "name_ja": "リザードンex",
+        "name_en": "Charizard ex",
+        "set_name": "ポケモンカード151",
+        "card_number": "205/165",
+        "rarity": "SAR",
+        "price_jpy": 24800,
+        "stock_status": "in_stock",
+        "updated_at": "2026-10-08 18:00"
+    },
+    {
+        "card_id": "SV2a-173",
+        "name_ja": "ピカチュウ",
+        "name_en": "Pikachu",
+        "set_name": "ポケモンカード151",
+        "card_number": "173/165",
+        "rarity": "AR",
+        "price_jpy": 2480,
+        "stock_status": "in_stock",
+        "updated_at": "2026-10-08 18:00"
+    },
+    {
+        "card_id": "SV1S-098",
+        "name_ja": "ミモザ",
+        "name_en": "Miriam",
+        "set_name": "バイオレットex",
+        "card_number": "098/078",
+        "rarity": "SAR",
+        "price_jpy": 39800,
+        "stock_status": "low_stock",
+        "updated_at": "2026-10-08 18:00"
+    },
+    {
+        "card_id": "SV4a-348",
+        "name_ja": "ナンジャモ",
+        "name_en": "Iono",
+        "set_name": "シャイニートレジャーex",
+        "card_number": "348/190",
+        "rarity": "SAR",
+        "price_jpy": 29800,
+        "stock_status": "in_stock",
+        "updated_at": "2026-10-08 18:00"
     }
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(response.text, "html.parser")
-        products = soup.select(".Product")
-        prices = []
-        for p in products[:5]:
-            price_elem = p.select_one(".Product__priceValue")
-            if price_elem:
-                price_num = int(re.sub(r"[^\d]", "", price_elem.text))
-                prices.append(price_num)
-        if prices:
-            return sum(prices) // len(prices)
-    except Exception:
-        pass
-    return 0
+]
 
-@app.get("/api/cards")
-def get_cards():
-    target_cards = ["ピカチュウ", "リザードン", "ミュウツー"]
-    api_data = []
-    
-    for i, name in enumerate(target_cards, 1):
-        market_price = get_card_price(name)
-        api_data.append({
-            "id": f"card-00{i}",
-            "name": name,
-            "price": market_price,
-            "stock": 10
-        })
-        
-    return api_data
+# 検索・絞り込み対応エンドポイント
+@app.get("/cards", response_model=List[CardPrice])
+def get_cards(
+    search: Optional[str] = Query(None, description="カード名、英語名、または型番（例: ピカチュウ, Pikachu, SV2a-173）"),
+    rarity: Optional[str] = Query(None, description="レアリティ（例: SAR, SR, AR）"),
+    limit: int = Query(20, ge=1, le=100)
+):
+    results = CARD_DATABASE
+
+    # 検索処理
+    if search:
+        search_kw = search.lower()
+        results = [
+            card for card in results 
+            if search_kw in card["name_ja"].lower() 
+            or search_kw in card["name_en"].lower()
+            or search_kw in card["card_id"].lower()
+        ]
+
+    # レアリティ絞り込み
+    if rarity:
+        results = [card for card in results if card["rarity"].upper() == rarity.upper()]
+
+    return results[:limit]
