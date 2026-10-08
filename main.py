@@ -83,10 +83,12 @@ def fetch_cards(search: Optional[str] = None, rarity: Optional[str] = None, limi
         results = [card for card in results if card["rarity"].upper() == rarity.upper()]
     return results[:limit]
 
-# どのURLパスでリクエストが来ても受け取れる設定
+# RapidAPIのどのようなURLパス（/Get%20Cards等）で来ても絶対に受け取る設定
 @app.get("/", response_model=List[CardPrice])
 @app.get("/cards", response_model=List[CardPrice])
 @app.get("/api/cards", response_model=List[CardPrice])
+@app.get("/Get Cards", response_model=List[CardPrice])
+@app.get("/Get%20Cards", response_model=List[CardPrice])
 def get_cards_all(
     search: Optional[str] = Query(None),
     rarity: Optional[str] = Query(None),
