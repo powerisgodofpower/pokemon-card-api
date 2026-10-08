@@ -69,6 +69,7 @@ CARD_DATABASE: List[dict] = [
 ]
 
 # 検索・絞り込み対応エンドポイント
+@app.get("/", response_model=List[CardPrice])
 @app.get("/cards", response_model=List[CardPrice])
 def get_cards(
     search: Optional[str] = Query(None, description="カード名、英語名、または型番（例: ピカチュウ, Pikachu, SV2a-173）"),
